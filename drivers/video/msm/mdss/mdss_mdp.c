@@ -4721,7 +4721,7 @@ static void mdss_mdp_config_cx_voltage(struct mdss_data_type *mdata, int enable)
 	}
 }
 
-#if defined(CONFIG_MACH_LENOVO_TB8704)  || defined(CONFIG_MACH_LENOVO_TB8804)
+#if defined(CONFIG_MACH_LENOVO_TB8703) || defined(CONFIG_MACH_LENOVO_TB8704) || defined(CONFIG_MACH_LENOVO_TB8804)
 int mdss_panel_get_boot_cfg(void)
 {
 	int rc;

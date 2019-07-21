@@ -505,7 +505,7 @@ static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 		if (rc) {
 			pr_err("request bklt gpio failed, rc=%d\n",
 				rc);
-#if !(defined(CONFIG_MACH_LENOVO_TB8704)  || defined(CONFIG_MACH_LENOVO_TB8804))
+#if !(defined(CONFIG_MACH_LENOVO_TB8703) || defined(CONFIG_MACH_LENOVO_TB8704)  || defined(CONFIG_MACH_LENOVO_TB8804))
 	goto bklt_en_gpio_err;
 #endif
 		}
@@ -2695,16 +2695,22 @@ int  mdss_dsi_panel_lcden_gpio_ctrl(struct mdss_dsi_ctrl_pdata *ctrl_pdata, int 
 		if (gpio_is_valid(ctrl_pdata->lcden_gpio)){
 			gpio_direction_output(ctrl_pdata->lcden_gpio, 1);
 			gpio_set_value((ctrl_pdata->lcden_gpio), 1);
+#if defined(CONFIG_MACH_LENOVO_TB8704)  || defined(CONFIG_MACH_LENOVO_TB8804)
 			if(lcd_panel_num == 1)
 				mdelay(30);
 			else if(lcd_panel_num == 2)
 				mdelay(15);
+#else
+			mdelay(30);
+#endif
 		}
 	}else{
+#if defined(CONFIG_MACH_LENOVO_TB8704)  || defined(CONFIG_MACH_LENOVO_TB8804)
 		if(lcd_panel_num == 1)
 			mdelay(100);
 		else if(lcd_panel_num == 2)
 			mdelay(20);
+#endif
 		if (gpio_is_valid(ctrl_pdata->lcden_gpio)){
 			gpio_set_value((ctrl_pdata->lcden_gpio), 0);
 			gpio_free(ctrl_pdata->lcden_gpio);

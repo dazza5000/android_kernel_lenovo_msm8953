@@ -8282,7 +8282,7 @@ static int fg_common_hw_init(struct fg_chip *chip)
 #if defined(CONFIG_MACH_LENOVO_TB8703) || defined(CONFIG_MACH_LENOVO_TBX704)
 	rc = fg_mem_masked_write(chip, settings[FG_MEM_DELTA_SOC].address, 0xFF,
 			settings[FG_MEM_DELTA_SOC].value,
-			settings[FG_MEM_DELTA_SOC].offset)
+			settings[FG_MEM_DELTA_SOC].offset);
 #elif  defined(CONFIG_MACH_LENOVO_TB8704) || defined(CONFIG_MACH_LENOVO_TB8804) || defined(CONFIG_MACH_LENOVO_TB8504)
         address_soc_delta = settings[FG_MEM_DELTA_SOC].address;
         if (settings[FG_MEM_DELTA_SOC].value < 3)
