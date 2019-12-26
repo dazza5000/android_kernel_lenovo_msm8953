@@ -11,8 +11,8 @@ menuconfig INPUT_TOUCHSCREEN
 
 if INPUT_TOUCHSCREEN
 
-source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
-source "drivers/input/touchscreen/synaptics_dsx_2.6/Kconfig"
+#source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
+#source "drivers/input/touchscreen/synaptics_dsx_2.6/Kconfig"
 
 config OF_TOUCHSCREEN
 	def_tristate INPUT
@@ -142,6 +142,18 @@ config TOUCHSCREEN_AUO_PIXCIR
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called auo-pixcir-ts.
+
+source "drivers/input/touchscreen/hxchipset/Kconfig"
+config TOUCHSCREEN_HIMAX_CHIPSET
+	bool "Himax touchpanel CHIPSET"
+	depends on I2C
+	help
+	  Say Y here if you have a Himax CHIPSET touchscreen.
+	  HIMAX controllers are multi touch controllers which can
+	  report 10 touches at a time.
+
+          If unsure, say N.
+
 
 source "drivers/input/touchscreen/elan/Kconfig"
 config TOUCHSCREEN_ELAN
@@ -564,39 +576,6 @@ config TOUCHSCREEN_MIGOR
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called migor_ts.
-
-config TOUCHSCREEN_SYNAPTICS_DSX_I2C
-	tristate "Synaptics DSX I2C touchscreen"
-	depends on I2C
-	help
-	  Say Y here if you have a Synaptics DSX I2C touchscreen
-	  connected to your system.
-
-	  If unsure, say N.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called synaptics_dsx_i2c.
-
-config TOUCHSCREEN_SYNAPTICS_DSX_RMI_DEV
-	tristate "Synaptics DSX touchscreen char device"
-	depends on TOUCHSCREEN_SYNAPTICS_DSX_I2C
-	help
-	  This enables support for direct register access for Synaptics DSX
-	  touchscreens.
-
-config TOUCHSCREEN_SYNAPTICS_DSX_TEST_REPORTING
-	tristate "Synaptics DSX touchscreen test reporting"
-	depends on TOUCHSCREEN_SYNAPTICS_DSX_I2C
-	help
-	  This enables support for test reporting for Synaptics DSX
-	  touchscreens.
-
-config TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE_MMI
-	tristate "Synaptics DSX touchscreen firmware update (MMI)"
-	depends on TOUCHSCREEN_SYNAPTICS_DSX_I2C
-	help
-	  This enables support for firmware update for Synaptics DSX
-	  touchscreens via the MMI design.
 
 config TOUCHSCREEN_TOUCHRIGHT
 	tristate "Touchright serial touchscreen"
@@ -1163,27 +1142,6 @@ config TOUCHSCREEN_GT9XX
 
           If unsure, say N.
 
-config TOUCHSCREEN_GT9XX_TB8704
-	bool "Goodix touchpanel GT9xx series for TB-8704"
-	depends on I2C
-	help
-	  Say Y here if you have a Goodix GT9xx touchscreen.
-	  Gt9xx controllers are multi touch controllers which can
-	  report 5 touches at a time.
-
-          If unsure, say N.
-
-
-config TOUCHSCREEN_GT910P
-	bool "Goodix touchpanel GT9xx series"
-	depends on I2C
-	help
-	  Say Y here if you have a Goodix GT910P touchscreen.
-	  Gt9xx controllers are multi touch controllers which can
-	  report 5 touches at a time.
-
-          If unsure, say N.
-
 config TOUCHSCREEN_MAXIM_STI
 	tristate "Maxim based STI touchscreens"
 	depends on SPI_MASTER
@@ -1197,53 +1155,5 @@ config TOUCHSCREEN_MAXIM_STI
 	  module will be called maxim_sti.
 
 source "drivers/input/touchscreen/gt9xx/Kconfig"
-source "drivers/input/touchscreen/gt9xx_tb8704/Kconfig"
 source "drivers/input/touchscreen/focaltech_touch/Kconfig"
-
-config TOUCHSCREEN_HIMAX_CHIPSET
-	bool "Himax touchpanel CHIPSET"
-	depends on I2C
-	help
-	  Say Y here if you have a Himax CHIPSET touchscreen.
-	  HIMAX controllers are multi touch controllers which can
-	  report 10 touches at a time.
-
-          If unsure, say N.
-
-source "drivers/input/touchscreen/hxchipset/Kconfig"
-source "drivers/input/touchscreen/tpd_property/Kconfig"
-
-config TOUCHSCREEN_HIMAX_HX852XF
-	tristate "Analog Devices AD7879-1/AD7889-1 touchscreen interface"
-	help
-	  Say Y here if you want to support a touchscreen interface using
-	  the AD7879-1/AD7889-1 controller.
-
-	  You should select a bus connection too.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called ad7879.
-config TOUCHSCREEN_HIMAX_I2C
-	tristate "Analog Devices AD7879-1/AD7889-1 touchscreen interface"
-	help
-	  Say Y here if you want to support a touchscreen interface using
-	  the AD7879-1/AD7889-1 controller.
-
-	  You should select a bus connection too.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called ad7879.
-config CONFIG_TOUCHSCREEN_HIMAX_DEBUG
-	tristate "Analog Devices AD7879-1/AD7889-1 touchscreen interface"
-	help
-	  Say Y here if you want to support a touchscreen interface using
-	  the AD7879-1/AD7889-1 controller.
-
-	  You should select a bus connection too.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called ad7879.
-source "drivers/input/touchscreen/hx852xf/Kconfig"
-source "drivers/input/touchscreen/gt910P/Kconfig"
-
 endif
