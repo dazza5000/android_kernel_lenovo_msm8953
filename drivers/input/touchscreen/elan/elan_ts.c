@@ -23,6 +23,8 @@
 
 #include <linux/miscdevice.h>
 
+#include "../lct_tp_fm_info.h"
+#include "../lct_ctp_upgrade.h"
 #include "elan_ts.h"
 
 /********ÊúÆÁ¹Ø±Õ£¬ºáÆÁ¿ªÆô********/
@@ -37,7 +39,7 @@
 static struct workqueue_struct *init_elan_ic_wq = NULL;
 static struct delayed_work init_work;
 static unsigned long delay = 2*HZ;
-extern int compare_tp_id;
+extern int compare_lcd_id;
 
 //#define ELAN_ESD_CHECK
 #ifdef ELAN_ESD_CHECK
@@ -1938,9 +1940,9 @@ static int __init elan_ts_init(void)
 {
     int ret = -1;
 
-    if(compare_tp_id != 1)
+    if(compare_lcd_id != 1)
     {
-	elan_info("%s failed, compare_tp_id = %d\n", __func__, compare_tp_id);
+	elan_info("elan %s failed, compare_lcd_id = %d\n", __func__, compare_lcd_id);
 	return ret;
     }
     elan_info("%s driver 004 version : auto-mapping resolution\n", __func__);   
