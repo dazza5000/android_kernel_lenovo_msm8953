@@ -432,7 +432,7 @@ struct mdss_dsi_ctrl_pdata {
 	int rst_gpio;
 	int disp_en_gpio;
 	int bklt_en_gpio;
-#if defined (CONFIG_MACH_LENOVO_TB8703) ||  defined(CONFIG_MACH_LENOVO_TB8704)  || defined(CONFIG_MACH_LENOVO_TB8804)
+#ifdef CONFIG_KERNEL_CUSTOM_P3590
 	int lcden_gpio;
 #endif
 	int mode_gpio;
@@ -490,7 +490,6 @@ struct mdss_dsi_ctrl_pdata {
 	struct dsi_panel_cmds cmd2video;
 
 	char pps_buf[DSC_PPS_LEN];	/* dsc pps */
-	struct dsi_panel_cmds *param_cmds[PARAM_ID_NUM];
 
 	struct dcs_cmd_list cmdlist;
 	struct completion dma_comp;
@@ -679,10 +678,6 @@ void mdss_dsi_set_reg(struct mdss_dsi_ctrl_pdata *ctrl, int off,
 	u32 mask, u32 val);
 int mdss_dsi_phy_pll_reset_status(struct mdss_dsi_ctrl_pdata *ctrl);
 int mdss_dsi_panel_power_ctrl(struct mdss_panel_data *pdata, int power_state);
-
-u32 mdss_dsi_panel_forced_tx_mode_get(struct mdss_panel_info *pinfo);
-void mdss_dsi_panel_forced_tx_mode_set(struct mdss_panel_info *pinfo,
-				bool enable);
 
 static inline const char *__mdss_dsi_pm_name(enum dsi_pm_type module)
 {

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -46,38 +46,6 @@ enum fps_resolution {
 #define SIM_SW_TE_PANEL	"sim-swte"
 #define SIM_HW_TE_PANEL	"sim-hwte"
 
-enum hbm_state {
-	HBM_OFF_STATE = 0,
-	HBM_ON_STATE,
-	HBM_STATE_NUM
-};
-
-enum acl_state {
-	ACL_OFF_STATE = 0,
-	ACL_ON_STATE,
-	ACL_STATE_NUM
-};
-
-enum panel_param_id {
-	PARAM_HBM_ID = 0,
-	PARAM_ACL_ID,
-	PARAM_ID_NUM
-};
-
-struct panel_param_val_map {
-	char *name;
-	char *prop;
-};
-
-struct panel_param {
-	const char *param_name;
-	const struct panel_param_val_map *val_map;
-	const u16 val_max;
-	const u16 default_value;
-	u16 value;
-	bool is_supported;
-};
-
 /* panel type list */
 #define NO_PANEL		0xffff	/* No Panel */
 #define MDDI_PANEL		1	/* MDDI */
@@ -92,9 +60,8 @@ struct panel_param {
 #define WRITEBACK_PANEL		10	/* Wifi display */
 #define LVDS_PANEL		11	/* LVDS */
 #define EDP_PANEL		12	/* LVDS */
-#define SPI_PANEL		13
-#define DSC_PPS_LEN		128
 
+#define DSC_PPS_LEN		128
 /* HDR propeties count */
 #define DISPLAY_PRIMARIES_COUNT	8	/* WRGB x and y values*/
 
@@ -140,7 +107,6 @@ enum {
 	MDSS_PANEL_INTF_DSI,
 	MDSS_PANEL_INTF_EDP,
 	MDSS_PANEL_INTF_HDMI,
-	MDSS_PANEL_INTF_SPI,
 };
 
 enum {
@@ -149,13 +115,6 @@ enum {
 	MDSS_PANEL_POWER_LP1,
 	MDSS_PANEL_POWER_LP2,
 };
-
-enum {
-	MDSS_PANEL_BLANK_BLANK = 0,
-	MDSS_PANEL_BLANK_UNBLANK,
-	MDSS_PANEL_BLANK_LOW_POWER,
-};
-
 
 enum {
 	MDSS_PANEL_LOW_PERSIST_MODE_OFF = 0,
@@ -468,10 +427,6 @@ struct edp_panel_info {
 	char frame_rate;	/* fps */
 };
 
-struct spi_panel_info {
-	char frame_rate;
-};
-
 /**
  * struct dynamic_fps_data - defines dynamic fps related data
  * @hfp: horizontal front porch
@@ -719,7 +674,6 @@ struct mdss_panel_info {
 	u32 partial_update_roi_merge;
 	struct ion_handle *splash_ihdl;
 	int panel_power_state;
-	int blank_state;
 	int compression_mode;
 
 	uint32_t panel_dead;
@@ -779,7 +733,6 @@ struct mdss_panel_info {
 	struct lcd_panel_info lcdc;
 	struct fbc_panel_info fbc;
 	struct mipi_panel_info mipi;
-	struct spi_panel_info spi;
 	struct lvds_panel_info lvds;
 	struct edp_panel_info edp;
 
@@ -799,11 +752,6 @@ struct mdss_panel_info {
 
 	/* HDR properties of display panel*/
 	struct mdss_panel_hdr_properties hdr_properties;
-
-	struct panel_param *param[PARAM_ID_NUM];
-	bool hbm_restore;
-	u32 forced_tx_mode_ftr_enabled;
-	u32 forced_tx_mode_state;
 };
 
 struct mdss_panel_timing {
@@ -844,7 +792,6 @@ struct mdss_panel_data {
 	struct mdss_panel_info panel_info;
 	void (*set_backlight) (struct mdss_panel_data *pdata, u32 bl_level);
 	int (*apply_display_setting)(struct mdss_panel_data *pdata, u32 mode);
-	int (*set_param)(struct mdss_panel_data *pdata, u16 id, u16 value);
 	unsigned char *mmss_cc_base;
 
 	/**
@@ -872,7 +819,6 @@ struct mdss_panel_data {
 	struct mdss_panel_data *next;
 
 	int panel_te_gpio;
-	int panel_en_gpio;
 	struct completion te_done;
 };
 
@@ -919,9 +865,6 @@ static inline u32 mdss_panel_get_framerate(struct mdss_panel_info *panel_info,
 		break;
 	case WRITEBACK_PANEL:
 		frame_rate = DEFAULT_FRAME_RATE;
-		break;
-	case SPI_PANEL:
-		frame_rate = panel_info->spi.frame_rate;
 		break;
 	case DTV_PANEL:
 		if (panel_info->dynamic_fps) {
@@ -1154,7 +1097,6 @@ static inline u8 mdss_panel_calc_frame_rate(struct mdss_panel_info *pinfo)
  */
 struct mdss_panel_cfg *mdss_panel_intf_type(int intf_val);
 
-#if defined(CONFIG_MACH_LENOVO_TB8703) || defined(CONFIG_MACH_LENOVO_TB8704)  || defined(CONFIG_MACH_LENOVO_TB8804)
 /**
  * mdss_panel_get_boot_cfg() - checks if bootloader config present
  *
@@ -1163,8 +1105,10 @@ struct mdss_panel_cfg *mdss_panel_intf_type(int intf_val);
  *
  * returns true if bootloader configured, else false
  */
+#ifdef CONFIG_KERNEL_CUSTOM_P3590
 int mdss_panel_get_boot_cfg(void);
 #endif
+
 
 /**
  * mdss_is_ready() - checks if mdss is probed and ready
@@ -1270,15 +1214,4 @@ static inline struct mdss_panel_timing *mdss_panel_get_timing_by_name(
 		struct mdss_panel_data *pdata,
 		const char *name) { return NULL; };
 #endif
-
-static inline bool mdss_panel_param_is_supported(struct mdss_panel_info *p,
-	u16 id)
-{
-	if (id < PARAM_ID_NUM && p && p->param[id] &&
-		p->param[id]->is_supported)
-		return true;
-
-	return false;
-};
-
 #endif /* MDSS_PANEL_H */

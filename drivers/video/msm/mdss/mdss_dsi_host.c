@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2017,2019 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1533,7 +1533,6 @@ static int mdss_dsi_cmd_dma_tpg_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 	int len, i, ret = 0, data = 0;
 	u32 *bp;
 	struct mdss_dsi_ctrl_pdata *mctrl = NULL;
-	int ignored = 0;        /* overflow ignored */
 
 	if (tp->len > DMA_TPG_FIFO_LEN) {
 		pr_debug("command length more than FIFO length\n");
@@ -1549,22 +1548,9 @@ static int mdss_dsi_cmd_dma_tpg_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 	len = ALIGN(tp->len, 4);
 
 	reinit_completion(&ctrl->dma_comp);
-	if (ctrl->panel_mode == DSI_VIDEO_MODE)
-		ignored = 1;
 
-	if (mdss_dsi_sync_wait_trigger(ctrl)) {
+	if (mdss_dsi_sync_wait_trigger(ctrl))
 		mctrl = mdss_dsi_get_other_ctrl(ctrl);
-			if ((mctrl) && (ignored == 1)) {
-				/* mask out overflow isr */
-				mdss_dsi_set_reg(mctrl, 0x10c,
-					 0x0f0000, 0x0f0000);
-			}
-	}
-
-	if (ignored) {
-		/* mask out overflow isr */
-		mdss_dsi_set_reg(ctrl, 0x10c, 0x0f0000, 0x0f0000);
-	}
 
 	data = BIT(16) | BIT(17);	/* select CMD_DMA_PATTERN_SEL to 3 */
 	data |= BIT(2);			/* select CMD_DMA_FIFO_MODE to 1 */
@@ -1625,13 +1611,6 @@ static int mdss_dsi_cmd_dma_tpg_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 	/* Disable CMD_DMA_TPG */
 	MIPI_OUTP(ctrl->ctrl_base + 0x15c, 0x0);
 
-	if (ignored) {
-		/* clear pending overflow status */
-		mdss_dsi_set_reg(ctrl, 0xc, 0xffffffff, 0x44440000);
-		/* restore overflow isr */
-		mdss_dsi_set_reg(ctrl, 0x10c, 0x0f0000, 0);
-	}
-
 	if (mctrl) {
 		/* Reset the DMA TPG FIFO */
 		MIPI_OUTP(mctrl->ctrl_base + 0x1ec, 0x1);
@@ -1640,13 +1619,8 @@ static int mdss_dsi_cmd_dma_tpg_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 		wmb(); /* make sure FIFO reset happens */
 		/* Disable CMD_DMA_TPG */
 		MIPI_OUTP(mctrl->ctrl_base + 0x15c, 0x0);
-		if (ignored) {
-			/* clear pending overflow status */
-			mdss_dsi_set_reg(mctrl, 0xc, 0xffffffff, 0x44440000);
-			/* restore overflow isr */
-			mdss_dsi_set_reg(mctrl, 0x10c, 0x0f0000, 0);
-		}
 	}
+
 	return ret;
 }
 
@@ -2610,14 +2584,13 @@ int mdss_dsi_cmdlist_commit(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp)
 	int rc = 0;
 	bool hs_req = false;
 	bool cmd_mutex_acquired = false;
-	u32 forced_mode;
 
-	pinfo = &ctrl->panel_data.panel_info;
 	if (from_mdp) {	/* from mdp kickoff */
 		if (!ctrl->burst_mode_enabled) {
 			mutex_lock(&ctrl->cmd_mutex);
 			cmd_mutex_acquired = true;
 		}
+		pinfo = &ctrl->panel_data.panel_info;
 		if (pinfo->partial_update_enabled)
 			roi = &pinfo->roi;
 	}
@@ -2631,16 +2604,8 @@ int mdss_dsi_cmdlist_commit(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp)
 	MDSS_XLOG(ctrl->ndx, from_mdp, ctrl->mdp_busy, current->pid,
 							XLOG_FUNC_ENTRY);
 
-	if (req) {
-		forced_mode = mdss_dsi_panel_forced_tx_mode_get(pinfo);
-		if (forced_mode) {
-			req->flags &= ~(CMD_REQ_HS_MODE | CMD_REQ_LP_MODE);
-			req->flags |= forced_mode;
-		}
-
-		if (req->flags & CMD_REQ_HS_MODE)
-			hs_req = true;
-	}
+	if (req && (req->flags & CMD_REQ_HS_MODE))
+		hs_req = true;
 
 	if ((!ctrl->burst_mode_enabled) || from_mdp) {
 		/* make sure dsi_cmd_mdp is idle */

@@ -2,7 +2,7 @@
  * Core MDSS framebuffer driver.
  *
  * Copyright (C) 2007 Google Incorporated
- * Copyright (c) 2008-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2008-2017, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -82,29 +82,11 @@
  */
 #define MDP_TIME_PERIOD_CALC_FPS_US	1000000
 
-#define __PARAM_SYSFS_DEFINITION(_name, _id) \
-static ssize_t _name##_show(struct device *dev, \
-		struct device_attribute *attr, char *buf) \
-{ \
-	const char *name; \
-	ssize_t ret; \
-	ret = mdss_fb_get_param(dev, _id, &name); \
-	if (ret < 0) \
-		return ret; \
-	return snprintf(buf, PAGE_SIZE, "%s\n", name); \
-} \
-static ssize_t _name##_store(struct device *dev, \
-		struct device_attribute *attr, \
-		const char *buf, size_t count) \
-{ \
-	ssize_t ret; \
-	ret = mdss_fb_set_param(dev, _id, buf); \
-	return ret ? ret : count; \
-}
-
 static struct fb_info *fbi_list[MAX_FBI_LIST];
 static int fbi_list_index;
-
+#ifdef CONFIG_KERNEL_CUSTOM_P3588
+u32 p3588_bl_level;
+#endif
 static u32 mdss_fb_pseudo_palette[16] = {
 	0x00000000, 0xffffffff, 0xffffffff, 0xffffffff,
 	0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
@@ -300,7 +282,10 @@ static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 {
 	struct msm_fb_data_type *mfd = dev_get_drvdata(led_cdev->dev->parent);
 	int bl_lvl;
-
+#if defined  CONFIG_KERNEL_CUSTOM_P3588
+/////mike_zhu add 20170317 	
+	int value_new =113; //mike_zhu add 20170317 
+#endif	
 	if (mfd->boot_notification_led) {
 		led_trigger_event(mfd->boot_notification_led, 0);
 		mfd->boot_notification_led = NULL;
@@ -308,7 +293,20 @@ static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 
 	if (value > mfd->panel_info->brightness_max)
 		value = mfd->panel_info->brightness_max;
-
+#if defined  CONFIG_KERNEL_CUSTOM_P3588 /////mike_zhu add 20170317 		
+pr_debug("%s:-old--value=%d", __func__, value);
+value_new=value;
+if(value_new >= 3)
+{
+value_new =(46*value_new)/51;
+value = value_new;
+}	
+else	
+{
+value=value;
+}
+pr_debug("%s:-old--value=%d,value_new=%d", __func__, value,value_new);
+#endif
 	/* This maps android backlight level 0 to 255 into
 	   driver backlight level 0 to bl_max with rounding */
 	MDSS_BRIGHT_TO_BL(bl_lvl, value, mfd->panel_info->bl_max,
@@ -363,9 +361,6 @@ static ssize_t mdss_fb_get_type(struct device *dev,
 		break;
 	case EDP_PANEL:
 		ret = snprintf(buf, PAGE_SIZE, "edp panel\n");
-		break;
-	case SPI_PANEL:
-		ret = snprintf(buf, PAGE_SIZE, "spi panel\n");
 		break;
 	default:
 		ret = snprintf(buf, PAGE_SIZE, "unknown panel\n");
@@ -946,203 +941,13 @@ static struct attribute_group mdss_fb_attr_group = {
 	.attrs = mdss_fb_attrs,
 };
 
-static struct panel_param *mdss_fb_dev_to_param(struct device *dev, u16 id)
-{
-	struct fb_info *fbi = dev_get_drvdata(dev);
-	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)fbi->par;
-	struct mdss_panel_info *pinfo = mfd->panel_info;
-	struct panel_param *param;
-
-	if (!pinfo) {
-		pr_err("pinfo is null\n");
-		return NULL;
-	}
-
-	if (id >= PARAM_ID_NUM) {
-		pr_err("panel param id %d not available\n", id);
-		return NULL;
-	}
-
-	param = pinfo->param[id];
-	if (!param)
-		pr_err("panel param is null\n");
-
-	return param;
-}
-
-static int mdss_fb_set_hw_param(struct msm_fb_data_type *mfd,
-		u16 id, u16 value)
-{
-	struct mdss_panel_data *pdata = dev_get_platdata(&mfd->pdev->dev);
-	struct mdss_panel_info *pinfo = mfd->panel_info;
-	struct panel_param *param;
-	int ret = -EINVAL;
-	const char *param_name, *val_name;
-
-	if (!pdata || !pdata->set_param) {
-		pr_err("panel data is null\n");
-		return -EINVAL;
-	}
-
-	param = pinfo->param[id];
-	if (!param)
-		return -EINVAL;
-
-	param_name = param->param_name;
-	if (value >= param->val_max) {
-		pr_err("invalid value %d for %s\n", value, param_name);
-		return -EINVAL;
-	}
-	val_name = param->val_map[value].name;
-
-	ret = pdata->set_param(pdata, id, value);
-	if (ret)
-		pr_err("failed to set %s to %s\n", param_name, val_name);
-	else
-		pr_info("%s = %s\n", param_name, val_name);
-
-	return ret;
-}
-
-static int __maybe_unused mdss_fb_set_param(struct device *dev,
-		u16 id, const char *name)
-{
-	struct fb_info *fbi = dev_get_drvdata(dev);
-	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)fbi->par;
-	struct mdss_mdp_ctl *ctl = mfd_to_ctl(mfd);
-	struct panel_param *param;
-	const char *val_name;
-	int ret = -EINVAL;
-	u16 value;
-
-	if (!ctl) {
-		pr_err("ctl data is null\n");
-		return -EINVAL;
-	}
-
-	param = mdss_fb_dev_to_param(dev, id);
-	if (!param)
-		return -EINVAL;
-
-	for (value = 0; value < param->val_max; value++) {
-		val_name = param->val_map[value].name;
-		if (val_name && !strncmp(name, val_name, strlen(val_name)))
-			break;
-	}
-
-	mutex_lock(&mfd->param_lock);
-
-	if (param->value == value)
-		goto unlock;
-
-	if (id == PARAM_HBM_ID) {
-		if (mdss_fb_is_power_on(mfd) && !mfd->panel_info->hbm_restore)
-			ret = mdss_fb_set_hw_param(mfd, id, value);
-		param->value = value;
-		goto unlock;
-	}
-
-	if (mdss_fb_is_power_on(mfd))
-		ret = mdss_fb_set_hw_param(mfd, id, value);
-	param->value = value;
-
-unlock:
-	mutex_unlock(&mfd->param_lock);
-
-	return ret;
-}
-
-static int __maybe_unused mdss_fb_get_param(struct device *dev,
-		u16 id, const char **name)
-{
-	struct panel_param *param = mdss_fb_dev_to_param(dev, id);
-
-	if (!param || !name) {
-		pr_err("param or name is null\n");
-		return -EINVAL;
-	}
-
-	*name = param->val_map[param->value].name;
-	return 0;
-}
-
-static void mdss_fb_restore_param_hbm(struct msm_fb_data_type *mfd)
-{
-	struct mdss_panel_info *pinfo = mfd->panel_info;
-	struct panel_param *param;
-
-	param = pinfo->param[PARAM_HBM_ID];
-	if (!param || !pinfo->hbm_restore)
-		return;
-
-	mutex_lock(&mfd->param_lock);
-
-	pinfo->hbm_restore = false;
-	mdss_fb_set_hw_param(mfd, PARAM_HBM_ID, param->value);
-
-	mutex_unlock(&mfd->param_lock);
-}
-
-static void mdss_fb_restore_param(struct msm_fb_data_type *mfd)
-{
-	struct mdss_panel_info *pinfo = mfd->panel_info;
-	struct panel_param *param;
-	int i;
-
-	mutex_lock(&mfd->param_lock);
-	for (i = 0; i < PARAM_ID_NUM; i++) {
-		param = pinfo->param[i];
-		if (!param || param->value == param->default_value)
-			continue;
-		if (i == PARAM_HBM_ID) {
-			pinfo->hbm_restore = true;
-			continue;
-		}
-		mdss_fb_set_hw_param(mfd, i, param->value);
-	}
-	mutex_unlock(&mfd->param_lock);
-}
-
-__PARAM_SYSFS_DEFINITION(hbm, PARAM_HBM_ID)
-__PARAM_SYSFS_DEFINITION(acl, PARAM_ACL_ID)
-
-static struct device_attribute param_attrs[PARAM_ID_NUM] = {
-	__ATTR(hbm, S_IWUSR | S_IWGRP | S_IRUSR | S_IRGRP, hbm_show, hbm_store),
-	__ATTR(acl, S_IWUSR | S_IWGRP | S_IRUSR | S_IRGRP,
-		acl_show, acl_store),
-};
-
-static int mdss_fb_create_param_sysfs(struct msm_fb_data_type *mfd)
-{
-	int i, rc = 0;
-
-	for (i = 0; i < PARAM_ID_NUM; i++) {
-		if (!mdss_panel_param_is_supported(mfd->panel_info, i))
-			continue;
-		rc = device_create_file(mfd->fbi->dev, &param_attrs[i]);
-		if (rc) {
-			pr_err("failed to create sysfs for id %d\n", i);
-			break;
-		}
-	}
-	return rc;
-}
-
 static int mdss_fb_create_sysfs(struct msm_fb_data_type *mfd)
 {
 	int rc;
 
 	rc = sysfs_create_group(&mfd->fbi->dev->kobj, &mdss_fb_attr_group);
-	if (rc) {
-		pr_err("sysfs group creation failed, rc=%d\n", rc);
-		goto err;
-	}
-
-	rc = mdss_fb_create_param_sysfs(mfd);
 	if (rc)
-		pr_err("panel parameter sysfs creation failed, rc=%d\n", rc);
-
-err:
+		pr_err("sysfs group creation failed, rc=%d\n", rc);
 	return rc;
 }
 
@@ -1154,9 +959,6 @@ static void mdss_fb_remove_sysfs(struct msm_fb_data_type *mfd)
 static void mdss_fb_shutdown(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd = platform_get_drvdata(pdev);
-
-	if (!mfd)
-		return;
 
 	mfd->shutdown_pending = true;
 
@@ -1415,7 +1217,6 @@ static int mdss_fb_probe(struct platform_device *pdev)
 	struct mdss_panel_data *pdata;
 	struct fb_info *fbi;
 	int rc;
-	const char *data;
 
 	if (fbi_list_index >= MAX_FBI_LIST)
 		return -ENOMEM;
@@ -1464,21 +1265,6 @@ static int mdss_fb_probe(struct platform_device *pdev)
 
 	mfd->pdev = pdev;
 
-	if (mfd->panel.type == SPI_PANEL)
-		mfd->fb_imgType = MDP_RGB_565;
-	if (mfd->panel.type == MIPI_VIDEO_PANEL || mfd->panel.type ==
-		MIPI_CMD_PANEL || mfd->panel.type == SPI_PANEL){
-		rc = of_property_read_string(pdev->dev.of_node,
-			"qcom,mdss-fb-format", &data);
-		if (!rc) {
-			if (!strcmp(data, "rgb888"))
-				mfd->fb_imgType = MDP_RGB_888;
-			else if (!strcmp(data, "rgb565"))
-				mfd->fb_imgType = MDP_RGB_565;
-			else
-				mfd->fb_imgType = MDP_RGBA_8888;
-		}
-	}
 	mfd->split_fb_left = mfd->split_fb_right = 0;
 
 	mdss_fb_set_split_mode(mfd, pdata);
@@ -1500,7 +1286,6 @@ static int mdss_fb_probe(struct platform_device *pdev)
 	mutex_init(&mfd->bl_lock);
 	mutex_init(&mfd->mdss_sysfs_lock);
 	mutex_init(&mfd->switch_lock);
-	mutex_init(&mfd->param_lock);
 
 	fbi_list[fbi_list_index++] = fbi;
 
@@ -1590,7 +1375,6 @@ static void mdss_fb_set_mdp_sync_pt_threshold(struct msm_fb_data_type *mfd,
 		mfd->mdp_sync_pt_data.threshold = 1;
 		mfd->mdp_sync_pt_data.retire_threshold = 0;
 		break;
-	case SPI_PANEL:
 	case MIPI_CMD_PANEL:
 		mfd->mdp_sync_pt_data.threshold = 1;
 		mfd->mdp_sync_pt_data.retire_threshold = 1;
@@ -1880,7 +1664,6 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 	u32 temp = bkl_lvl;
 	bool ad_bl_notify_needed = false;
 	bool bl_notify_needed = false;
-	bool twm_en = false;
 
 	if ((((mdss_fb_is_power_off(mfd) && mfd->dcm_state != DCM_ENTER)
 		|| !mfd->allow_bl_update) && !IS_CALIB_MODE_BL(mfd)) ||
@@ -1915,16 +1698,9 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 			if (mfd->bl_level != bkl_lvl)
 				bl_notify_needed = true;
 			pr_debug("backlight sent to panel :%d\n", temp);
-			if (mfd->mdp.is_twm_en)
-				twm_en = mfd->mdp.is_twm_en();
-
-			if (twm_en) {
-				pr_info("TWM Enabled skip backlight update\n");
-			} else {
-				pdata->set_backlight(pdata, temp);
-				mfd->bl_level = bkl_lvl;
-				mfd->bl_level_scaled = temp;
-			}
+			pdata->set_backlight(pdata, temp);
+			mfd->bl_level = bkl_lvl;
+			mfd->bl_level_scaled = temp;
 		}
 		if (ad_bl_notify_needed)
 			mdss_fb_bl_update_notify(mfd,
@@ -1940,8 +1716,6 @@ void mdss_fb_update_backlight(struct msm_fb_data_type *mfd)
 	struct mdss_panel_data *pdata;
 	u32 temp;
 	bool bl_notify = false;
-
-	mdss_fb_restore_param_hbm(mfd);
 
 	if (mfd->unset_bl_level == U32_MAX)
 		return;
@@ -2027,20 +1801,6 @@ static void mdss_panel_validate_debugfs_info(struct msm_fb_data_type *mfd)
 	}
 }
 
-static void mdss_fb_signal_retire_fence(struct msm_fb_data_type *mfd)
-{
-#ifdef TARGET_HW_MDSS_MDP3
-	struct mdp3_session_data *mdp3_session = mfd_to_mdp3_data(mfd);
-	int retire_cnt = mdp3_session->retire_cnt;
-#else
-	struct mdss_overlay_private *mdp5_data = mfd_to_mdp5_data(mfd);
-	int retire_cnt = mdp5_data->retire_cnt;
-#endif
-
-	if (mfd->mdp.signal_retire_fence)
-		mfd->mdp.signal_retire_fence(mfd, retire_cnt);
-}
-
 static int mdss_fb_blank_blank(struct msm_fb_data_type *mfd,
 	int req_power_state)
 {
@@ -2081,7 +1841,7 @@ static int mdss_fb_blank_blank(struct msm_fb_data_type *mfd,
 		current_bl = mfd->bl_level;
 		mfd->allow_bl_update = true;
 		mdss_fb_set_backlight(mfd, 0);
-#if defined(CONFIG_MACH_LENOVO_TB8704)  || defined(CONFIG_MACH_LENOVO_TB8804)
+#if defined(CONFIG_KERNEL_CUSTOM_P3590)
 		mdelay(50);
 #endif
 		mfd->allow_bl_update = false;
@@ -2091,13 +1851,10 @@ static int mdss_fb_blank_blank(struct msm_fb_data_type *mfd,
 	mfd->panel_power_state = req_power_state;
 
 	ret = mfd->mdp.off_fnc(mfd);
-	if (ret) {
+	if (ret)
 		mfd->panel_power_state = cur_power_state;
-	} else if (!mdss_panel_is_power_on_interactive(req_power_state)) {
+	else if (mdss_panel_is_power_off(req_power_state))
 		mdss_fb_release_fences(mfd);
-		if (mfd->panel.type == MIPI_CMD_PANEL)
-			mdss_fb_signal_retire_fence(mfd);
-	}
 	mfd->op_enable = true;
 	complete(&mfd->power_off_comp);
 
@@ -2163,8 +1920,6 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 
 	/* Reset the backlight only if the panel was off */
 	if (mdss_panel_is_power_off(cur_power_state)) {
-		mdss_fb_restore_param(mfd);
-
 		mutex_lock(&mfd->bl_lock);
 		if (!mfd->allow_bl_update) {
 			mfd->allow_bl_update = true;
@@ -2222,14 +1977,6 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 	 * supported for command mode panels. For all other panel, treat lp
 	 * mode as full unblank and ulp mode as full blank.
 	 */
-	if ((mfd->panel_info->type == SPI_PANEL) &&
-		((BLANK_FLAG_LP == blank_mode) ||
-		(BLANK_FLAG_ULP == blank_mode))) {
-		pr_debug("lp/ulp mode are not supported for SPI panels\n");
-		if (mdss_fb_is_power_on_interactive(mfd))
-			return 0;
-	}
-
 	if (mfd->panel_info->type != MIPI_CMD_PANEL) {
 		if (BLANK_FLAG_LP == blank_mode) {
 			pr_debug("lp mode only valid for cmd mode panels\n");
@@ -3595,7 +3342,7 @@ int mdss_fb_atomic_commit(struct fb_info *info,
 	struct mdss_panel_info *pinfo;
 	bool wait_for_finish, wb_change = false;
 	int ret = -EPERM;
-	u32 old_xres = 0, old_yres = 0, old_format = 0;
+	u32 old_xres, old_yres, old_format;
 
 	if (!mfd || (!mfd->op_enable)) {
 		pr_err("mfd is NULL or operation not permitted\n");
@@ -3606,37 +3353,37 @@ int mdss_fb_atomic_commit(struct fb_info *info,
 		!((mfd->dcm_state == DCM_ENTER) &&
 		(mfd->panel.type == MIPI_CMD_PANEL))) {
 		pr_err("commit is not supported when interface is in off state\n");
-		return ret;
+		goto end;
 	}
 	pinfo = mfd->panel_info;
 
 	/* only supports version 1.0 */
 	if (commit->version != MDP_COMMIT_VERSION_1_0) {
 		pr_err("commit version is not supported\n");
-		return ret;
+		goto end;
 	}
 
 	if (!mfd->mdp.pre_commit || !mfd->mdp.atomic_validate) {
 		pr_err("commit callback is not registered\n");
-		return ret;
+		goto end;
 	}
 
 	commit_v1 = &commit->commit_v1;
 	if (commit_v1->flags & MDP_VALIDATE_LAYER) {
 		ret = mdss_fb_wait_for_kickoff(mfd);
 		if (ret) {
-			pr_err("wait for kickoff failed, ret: %d\n", ret);
+			pr_err("wait for kickoff failed\n");
 		} else {
 			__ioctl_transition_dyn_mode_state(mfd,
 				MSMFB_ATOMIC_COMMIT, true, false);
 			if (mfd->panel.type == WRITEBACK_PANEL) {
-				if (!commit_v1->output_layer) {
-					pr_err("Output layer is null\n");
-					return ret;
-				}
 				output_layer = commit_v1->output_layer;
+				if (!output_layer) {
+					pr_err("Output layer is null\n");
+					goto end;
+				}
 				wb_change = !mdss_fb_is_wb_config_same(mfd,
-						output_layer);
+						commit_v1->output_layer);
 				if (wb_change) {
 					old_xres = pinfo->xres;
 					old_yres = pinfo->yres;
@@ -3650,16 +3397,13 @@ int mdss_fb_atomic_commit(struct fb_info *info,
 			ret = mfd->mdp.atomic_validate(mfd, file, commit_v1);
 			if (!ret)
 				mfd->atomic_commit_pending = true;
-			else if (wb_change)
-				mdss_fb_update_resolution(mfd, old_xres,
-							old_yres, old_format);
 		}
-		return ret;
+		goto end;
 	} else {
 		ret = mdss_fb_pan_idle(mfd);
 		if (ret) {
-			pr_err("pan display idle call failed, ret: %d\n", ret);
-			return ret;
+			pr_err("pan display idle call failed\n");
+			goto end;
 		}
 		__ioctl_transition_dyn_mode_state(mfd,
 			MSMFB_ATOMIC_COMMIT, false,
@@ -3667,8 +3411,8 @@ int mdss_fb_atomic_commit(struct fb_info *info,
 
 		ret = mfd->mdp.pre_commit(mfd, file, commit_v1);
 		if (ret) {
-			pr_err("atomic pre commit failed, ret: %d\n", ret);
-			return ret;
+			pr_err("atomic pre commit failed\n");
+			goto end;
 		}
 	}
 
@@ -3687,6 +3431,9 @@ int mdss_fb_atomic_commit(struct fb_info *info,
 	if (wait_for_finish)
 		ret = mdss_fb_pan_idle(mfd);
 
+end:
+	if (ret && (mfd->panel.type == WRITEBACK_PANEL) && wb_change)
+		mdss_fb_update_resolution(mfd, old_xres, old_yres, old_format);
 	return ret;
 }
 
@@ -3917,8 +3664,9 @@ skip_commit:
 	if (IS_ERR_VALUE(ret) || !sync_pt_data->flushed) {
 		mdss_fb_release_kickoff(mfd);
 		mdss_fb_signal_timeline(sync_pt_data);
-		if (mfd->panel.type == MIPI_CMD_PANEL)
-			mdss_fb_signal_retire_fence(mfd);
+		if ((mfd->panel.type == MIPI_CMD_PANEL) &&
+			(mfd->mdp.signal_retire_fence))
+			mfd->mdp.signal_retire_fence(mfd, 1);
 	}
 
 	if (dynamic_dsi_switch) {

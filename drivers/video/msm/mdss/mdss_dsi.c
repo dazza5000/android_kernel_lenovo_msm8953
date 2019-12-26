@@ -26,6 +26,7 @@
 #include <linux/uaccess.h>
 #include <linux/msm-bus.h>
 #include <linux/pm_qos.h>
+
 #include "mdss.h"
 #include "mdss_panel.h"
 #include "mdss_dsi.h"
@@ -42,21 +43,16 @@ static struct mdss_dsi_data *mdss_dsi_res;
 #define DSI_DISABLE_PC_LATENCY 100
 #define DSI_ENABLE_PC_LATENCY PM_QOS_DEFAULT_VALUE
 
-static struct pm_qos_request mdss_dsi_pm_qos_request;
-#ifdef CONFIG_MACH_LENOVO_TB8703
-extern int mdss_dsi_panel_lcden_gpio_ctrl(struct mdss_dsi_ctrl_pdata *ctrl, int on);
-#endif
-#ifdef CONFIG_MACH_LENOVO_TBX704
-/* Add-Begin by Phoenix.Wu for Achillies4 Plus LCD */
-static int lcd_power_en,lcd_level_shift;
-/* Add-end by Phoenix.Wu for Achillies4 Plus LCD */
-#endif
-#ifdef CONFIG_MACH_LENOVO_TB8504
+#ifdef CONFIG_KERNEL_CUSTOM_P3588
 extern int elan_flag;	//lct--lyh--add for tp firmware update
+extern int compare_tp_id;
+extern void himax_int_enable(int irqnum, int enable);
+extern int tp_irq;
 #endif
 
+
 static struct pm_qos_request mdss_dsi_pm_qos_request;
-#if defined(CONFIG_MACH_LENOVO_TB8704)  || defined(CONFIG_MACH_LENOVO_TB8804)
+#if defined(CONFIG_KERNEL_CUSTOM_P3590)
 extern int mdss_dsi_panel_lcden_gpio_ctrl(struct mdss_dsi_ctrl_pdata *ctrl, int on);
 #endif
 static void mdss_dsi_pm_qos_add_request(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
@@ -300,10 +296,14 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
+	#ifdef CONFIG_KERNEL_CUSTOM_P3588
+    	mdelay(80);
+	#endif
+
 	ret = mdss_dsi_panel_reset(pdata, 0);
-#ifdef CONFIG_MACH_LENOVO_TB8504
-	mdelay(10);
-#endif
+	#ifdef CONFIG_KERNEL_CUSTOM_P3588
+    	mdelay(10);
+	#endif
 	if (ret) {
 		pr_warn("%s: Panel reset failed. rc=%d\n", __func__, ret);
 		ret = 0;
@@ -318,37 +318,8 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 	if (ret)
 		pr_err("%s: failed to disable vregs for %s\n",
 			__func__, __mdss_dsi_pm_name(DSI_PANEL_PM));
-#ifdef CONFIG_MACH_LENOVO_TBX704
-	/* Add-Begin by Phoenix.Wu for Achillies4 Plus LCD */
-	if (gpio_is_valid(lcd_power_en)){
-		ret = gpio_request(lcd_power_en,"lcd_power_enable");
-			if (ret) {
-			pr_err("request lcd_power_enable gpio failed, ret=%d\n",ret);
-				}
-					}
 
-	if (gpio_is_valid(lcd_level_shift)){
-		ret = gpio_request(lcd_level_shift,"lcd_level_shift_enable");
-			if (ret) {
-			pr_err("request lcd_level_shift_enable failed, ret=%d\n",ret);
-				}
-					}
-
-	if (gpio_is_valid(lcd_level_shift)){
-		gpio_direction_output(lcd_level_shift,0);
-		gpio_free(lcd_level_shift);
-	}
-	mdelay(5);
-	if (gpio_is_valid(lcd_power_en)){
-		gpio_direction_output(lcd_power_en,0);
-		gpio_free(lcd_power_en);
-	}
-	/* Add-end by Phoenix.Wu for Achillies4 Plus LCD */
-
-	msleep(400);
-	#endif
 end:
-
 	return ret;
 }
 
@@ -361,31 +332,7 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
 	}
-	#ifdef CONFIG_MACH_LENOVO_TBX704
-	/* Add-Begin by Phoenix.Wu for Achillies4 Plus LCD */
-	if (!pdata->panel_info.cont_splash_enabled){
-		if (gpio_is_valid(lcd_power_en)){
-			ret = gpio_request(lcd_power_en,"lcd_power_enable");
-			if (ret) {
-				pr_err("request lcd_power_enable gpio failed, ret=%d\n",ret);
-			}
-		}
 
-		if (gpio_is_valid(lcd_level_shift)){
-			ret = gpio_request(lcd_level_shift,"lcd_level_shift_enable");
-			if (ret) {
-				pr_err("request lcd_level_shift_enable gpio failed, ret=%d\n",ret);
-			}
-		}
-		gpio_direction_output(lcd_power_en,1);
-		//mdelay(20);
-		gpio_direction_output(lcd_level_shift,1);
-		//mdelay(20);
-		gpio_free(lcd_power_en);
-		gpio_free(lcd_level_shift);
-		}
-	/* Add-end by Phoenix.Wu for Achillies4 Plus LCD */
-	#endif
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
@@ -424,6 +371,9 @@ static int mdss_dsi_panel_power_lp(struct mdss_panel_data *pdata, int enable)
 	return 0;
 }
 
+#ifdef CONFIG_KERNEL_CUSTOM_P3588
+int is_auo_lcm(void);
+#endif
 static int mdss_dsi_panel_power_ulp(struct mdss_panel_data *pdata,
 					int enable)
 {
@@ -477,10 +427,9 @@ static int mdss_dsi_panel_power_ulp(struct mdss_panel_data *pdata,
 int mdss_dsi_panel_power_ctrl(struct mdss_panel_data *pdata,
 	int power_state)
 {
-	int ret = 0;
+	int ret;
 	struct mdss_panel_info *pinfo;
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
-
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
@@ -495,27 +444,25 @@ int mdss_dsi_panel_power_ctrl(struct mdss_panel_data *pdata,
 		pr_debug("%s: no change needed\n", __func__);
 		return 0;
 	}
-#ifdef CONFIG_MACH_LENOVO_TB8504
-	if(power_state==1){
-		gpio_direction_output(0,1);
-		mdelay(3);
-		gpio_direction_output(47,1);
+#ifdef CONFIG_KERNEL_CUSTOM_P3588	
+   	if(power_state==1){
+		if (is_auo_lcm()) {
+			gpio_direction_output(47,1);
+		}
+		else {
+			mdelay(50);
+			gpio_direction_output(0,1);
+			mdelay(3);
+			gpio_direction_output(47,1);
+		}
 	}
 #endif
 
-
-	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
-				panel_data);
-#ifdef CONFIG_MACH_LENOVO_TB8703
-	mdss_dsi_panel_lcden_gpio_ctrl(ctrl_pdata, power_state);
-#endif
-
-#if defined(CONFIG_MACH_LENOVO_TB8704)  || defined(CONFIG_MACH_LENOVO_TB8804)
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 		panel_data);
+#if defined(CONFIG_KERNEL_CUSTOM_P3590)
 	mdss_dsi_panel_lcden_gpio_ctrl(ctrl_pdata, power_state);
 #endif
-
 	/*
 	 * If a dynamic mode switch is pending, the regulators should not
 	 * be turned off or on.
@@ -560,24 +507,30 @@ int mdss_dsi_panel_power_ctrl(struct mdss_panel_data *pdata,
 		ret = -EINVAL;
 	}
 
-#ifdef CONFIG_MACH_LENOVO_TB8504
+#ifdef CONFIG_KERNEL_CUSTOM_P3588
+
 	if(power_state == 0)
 	{
+		if(compare_tp_id == 2)
+		{
+                	himax_int_enable(tp_irq, 0);
+		}
 		if(elan_flag == 1)
 		{
-			gpio_direction_output(0,1);
-		mdelay(1);
-		gpio_direction_output(47,1);
+	 		gpio_direction_output(0,1);
+        	mdelay(1);
+    		gpio_direction_output(47,1);
 		}
 		else
 		{
 			gpio_direction_output(47,0);
-			mdelay(3);
+			mdelay(6);
 			gpio_direction_output(0,0);
+			mdelay(50);
+
 		}
 	}
-#endif
-
+#endif	
 	if (!ret)
 		pinfo->panel_power_state = power_state;
 end:
@@ -1815,8 +1768,7 @@ static int mdss_dsi_blank(struct mdss_panel_data *pdata, int power_state)
 			ATRACE_BEGIN("dsi_panel_off");
 			ret = ctrl_pdata->off(pdata);
 			if (ret) {
-				pr_err("%s: Panel OFF failed\n",
-					__func__);
+				pr_err("%s: Panel OFF failed\n", __func__);
 				goto error;
 			}
 			ATRACE_END("dsi_panel_off");
@@ -2141,7 +2093,7 @@ static int __mdss_dsi_dfps_update_clks(struct mdss_panel_data *pdata,
 {
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	struct mdss_dsi_ctrl_pdata *sctrl_pdata = NULL;
-	struct mdss_panel_info *pinfo, *spinfo = NULL;
+	struct mdss_panel_info *pinfo, *spinfo;
 	int rc = 0;
 
 	if (pdata == NULL) {
@@ -2290,7 +2242,7 @@ static int __mdss_dsi_dfps_update_clks(struct mdss_panel_data *pdata,
 
 	/* update new fps that at this point is already updated in hw */
 	pinfo->current_fps = new_fps;
-	if (spinfo) {
+	if (sctrl_pdata) {
 		spinfo->current_fps = new_fps;
 	}
 
@@ -2930,17 +2882,12 @@ static struct device_node *mdss_dsi_pref_prim_panel(
  *
  * returns pointer to panel node on success, NULL on error.
  */
- #ifdef CONFIG_MACH_LENOVO_TBX704
-static char panel_name[MDSS_MAX_PANEL_LEN] = "";
-#endif
 static struct device_node *mdss_dsi_find_panel_of_node(
 		struct platform_device *pdev, char *panel_cfg)
 {
 	int len, i = 0;
 	int ctrl_id = pdev->id - 1;
-#ifndef CONFIG_MACH_LENOVO_TBX704
 	char panel_name[MDSS_MAX_PANEL_LEN] = "";
-#endif
 	char ctrl_id_stream[3] =  "0:";
 	char *str1 = NULL, *str2 = NULL, *override_cfg = NULL;
 	char cfg_np_name[MDSS_MAX_PANEL_LEN] = "";
@@ -3001,7 +2948,6 @@ static struct device_node *mdss_dsi_find_panel_of_node(
 		}
 		pr_info("%s: cmdline:%s panel_name:%s\n",
 			__func__, panel_cfg, panel_name);
-
 		if (!strcmp(panel_name, NONE_PANEL))
 			goto exit;
 
@@ -3290,7 +3236,6 @@ static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
 	struct mdss_util_intf *util;
 	static int te_irq_registered;
 	struct mdss_panel_data *pdata;
-	struct mdss_panel_cfg *pan_cfg = NULL;
 
 	if (!pdev || !pdev->dev.of_node) {
 		pr_err("%s: pdev not found for DSI controller\n", __func__);
@@ -3320,14 +3265,6 @@ static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
 	util = mdss_get_util_intf();
 	if (util == NULL) {
 		pr_err("Failed to get mdss utility functions\n");
-		return -ENODEV;
-	}
-
-	pan_cfg = util->panel_intf_type(MDSS_PANEL_INTF_SPI);
-	if (IS_ERR(pan_cfg)) {
-		return PTR_ERR(pan_cfg);
-	} else if (pan_cfg) {
-		pr_debug("%s: SPI is primary\n", __func__);
 		return -ENODEV;
 	}
 
@@ -3880,12 +3817,6 @@ static int mdss_dsi_probe(struct platform_device *pdev)
 		return -EPROBE_DEFER;
 	}
 
-	if (util->display_disabled) {
-		pr_info("%s: Display is disabled, not progressing with dsi probe\n",
-			__func__);
-		return -ENOTSUPP;
-	}
-
 	if (!pdev || !pdev->dev.of_node) {
 		pr_err("%s: DSI driver only supports device tree probe\n",
 			__func__);
@@ -4209,7 +4140,6 @@ static int mdss_dsi_parse_gpio_params(struct platform_device *ctrl_pdev,
 		if (!gpio_is_valid(ctrl_pdata->disp_en_gpio))
 			pr_debug("%s:%d, Disp_en gpio not specified\n",
 					__func__, __LINE__);
-		pdata->panel_en_gpio = ctrl_pdata->disp_en_gpio;
 	}
 
 	ctrl_pdata->disp_te_gpio = of_get_named_gpio(ctrl_pdev->dev.of_node,
@@ -4230,23 +4160,7 @@ static int mdss_dsi_parse_gpio_params(struct platform_device *ctrl_pdev,
 	if (!gpio_is_valid(ctrl_pdata->rst_gpio))
 		pr_err("%s:%d, reset gpio not specified\n",
 						__func__, __LINE__);
-#ifdef CONFIG_MACH_LENOVO_TBX704
-	/* Add-Begin by Phoenix.Wu for Achillies4 Plus LCD */
-	pr_err("get lcd_power_en gpio \n");
-	lcd_power_en = of_get_named_gpio(ctrl_pdev->dev.of_node,
-			 "qcom,platform-power-en-gpio", 0);
-	if (!gpio_is_valid(lcd_power_en))
-		pr_err("%s:%d, lcd_power_en gpio not specified\n",
-						__func__, __LINE__);
 
-	pr_err("get lcd_level_shift gpio \n");
-	lcd_level_shift = of_get_named_gpio(ctrl_pdev->dev.of_node,
-			 "qcom,platform-lcd-level-shift-en-gpio", 0);
-	if (!gpio_is_valid(lcd_level_shift))
-		pr_err("%s:%d, lcd_level_shift gpio not specified\n",
-						__func__, __LINE__);
-	/* Add-end by Phoenix.Wu for Achillies4 Plus LCD */
-#endif
 	if (pinfo->mode_gpio_state != MODE_GPIO_NOT_VALID) {
 
 		ctrl_pdata->mode_gpio = of_get_named_gpio(
@@ -4428,10 +4342,6 @@ int dsi_panel_device_register(struct platform_device *ctrl_pdev,
 
 	pr_info("%s: Continuous splash %s\n", __func__,
 		pinfo->cont_splash_enabled ? "enabled" : "disabled");
-
-	if (pinfo->cont_splash_enabled &&
-		pinfo->forced_tx_mode_ftr_enabled)
-		mdss_dsi_panel_forced_tx_mode_set(pinfo, true);
 
 	rc = mdss_register_panel(ctrl_pdev, &(ctrl_pdata->panel_data));
 	if (rc) {
