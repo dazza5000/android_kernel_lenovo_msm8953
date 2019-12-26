@@ -318,8 +318,6 @@ static struct dsi_cmd_desc backlight_cmd8 = {
 static char led_pwm1[2] = {0x51, 0x0};	/* DTYPE_DCS_WRITE1 */
 
 //boe start
-static char led_pwm2[3] = {0x50, 0x5A,0x23};
-static char led_pwm3[3] = {0x90, 0xFF,0x0F};
 //static char led_pwm4[3] = {0x94, 0x2C, 0X01};
 /*static struct dsi_cmd_desc backlight_cmd4 = {
 	{DTYPE_DCS_LWRITE, 1, 0, 0, 1, sizeof(led_pwm4)},
