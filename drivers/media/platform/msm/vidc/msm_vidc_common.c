@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1070,7 +1070,7 @@ static void handle_session_init_done(enum hal_command_response cmd, void *data)
 
 static void handle_event_change(enum hal_command_response cmd, void *data)
 {
-	struct msm_vidc_inst *inst = NULL;
+	struct msm_vidc_inst *inst;
 	struct msm_vidc_cb_event *event_notify = data;
 	int event = V4L2_EVENT_SEQ_CHANGED_INSUFFICIENT;
 	struct v4l2_event seq_changed_event = {0};
@@ -2077,6 +2077,8 @@ static void handle_fbd(enum hal_command_response cmd, void *data)
 			vb->v4l2_buf.flags |= V4L2_QCOM_BUF_FLAG_READONLY;
 		if (fill_buf_done->flags1 & HAL_BUFFERFLAG_EOS)
 			vb->v4l2_buf.flags |= V4L2_QCOM_BUF_FLAG_EOS;
+		if (fill_buf_done->flags1 & HAL_BUFFERFLAG_ENDOFFRAME)
+			vb->v4l2_buf.flags |= V4L2_QCOM_BUF_FLAG_ENDOFFRAME;
 		if (fill_buf_done->flags1 & HAL_BUFFERFLAG_CODECCONFIG)
 			vb->v4l2_buf.flags &= ~V4L2_QCOM_BUF_FLAG_CODECCONFIG;
 		if (fill_buf_done->flags1 & HAL_BUFFERFLAG_SYNCFRAME)
@@ -2447,6 +2449,7 @@ static int msm_comm_session_abort(struct msm_vidc_inst *inst)
 	}
 	hdev = inst->core->device;
 	abort_completion = SESSION_MSG_INDEX(HAL_SESSION_ABORT_DONE);
+	init_completion(&inst->completions[abort_completion]);
 
 	rc = call_hfi_op(hdev, session_abort, (void *)inst->session);
 	if (rc) {
@@ -2605,6 +2608,8 @@ static int msm_comm_init_core(struct msm_vidc_inst *inst)
 			__func__);
 	}
 
+	init_completion(&core->completions
+			[SYS_MSG_INDEX(HAL_SYS_INIT_DONE)]);
 	rc = call_hfi_op(hdev, core_init, hdev->hfi_device_data);
 	if (rc) {
 		dprintk(VIDC_ERR, "Failed to init core, id = %d\n",
@@ -2708,6 +2713,8 @@ static int msm_comm_session_init(int flipped_state,
 		dprintk(VIDC_ERR, "Invalid session\n");
 		return -EINVAL;
 	}
+	init_completion(
+		&inst->completions[SESSION_MSG_INDEX(HAL_SESSION_INIT_DONE)]);
 
 	rc = call_hfi_op(hdev, session_init, hdev->hfi_device_data,
 			inst, get_hal_domain(inst->session_type),
@@ -2845,6 +2852,8 @@ static int msm_vidc_start(int flipped_state, struct msm_vidc_inst *inst)
 			inst, inst->state);
 		goto exit;
 	}
+	init_completion(
+		&inst->completions[SESSION_MSG_INDEX(HAL_SESSION_START_DONE)]);
 	rc = call_hfi_op(hdev, session_start, (void *) inst->session);
 	if (rc) {
 		dprintk(VIDC_ERR,
@@ -2874,6 +2883,8 @@ static int msm_vidc_stop(int flipped_state, struct msm_vidc_inst *inst)
 		goto exit;
 	}
 	dprintk(VIDC_DBG, "Send Stop to hal\n");
+	init_completion(
+		&inst->completions[SESSION_MSG_INDEX(HAL_SESSION_STOP_DONE)]);
 	rc = call_hfi_op(hdev, session_stop, (void *) inst->session);
 	if (rc) {
 		dprintk(VIDC_ERR, "Failed to send stop\n");
@@ -2903,6 +2914,8 @@ static int msm_vidc_release_res(int flipped_state, struct msm_vidc_inst *inst)
 	}
 	dprintk(VIDC_DBG,
 		"Send release res to hal\n");
+	init_completion(&inst->completions[
+			SESSION_MSG_INDEX(HAL_SESSION_RELEASE_RESOURCE_DONE)]);
 	rc = call_hfi_op(hdev, session_release_res, (void *) inst->session);
 	if (rc) {
 		dprintk(VIDC_ERR,
@@ -2933,6 +2946,8 @@ static int msm_comm_session_close(int flipped_state,
 	}
 	dprintk(VIDC_DBG,
 		"Send session close to hal\n");
+	init_completion(
+		&inst->completions[SESSION_MSG_INDEX(HAL_SESSION_END_DONE)]);
 	rc = call_hfi_op(hdev, session_end, (void *) inst->session);
 	if (rc) {
 		dprintk(VIDC_ERR,
@@ -3491,13 +3506,6 @@ int msm_vidc_comm_cmd(void *instance, union msm_v4l2_cmd *cmd)
 		u32 *ptr = NULL;
 		struct hal_buffer_requirements *output_buf;
 
-		if (inst->session_type != MSM_VIDC_DECODER) {
-			dprintk(VIDC_ERR,
-				"Session type is not MSM_VIDC_DECODER\n");
-			rc = -EINVAL;
-			break;
-		}
-
 		rc = msm_comm_try_get_bufreqs(inst);
 		if (rc) {
 			dprintk(VIDC_ERR,
@@ -3696,7 +3704,7 @@ static int request_seq_header(struct msm_vidc_inst *inst,
  */
 int msm_comm_qbuf(struct msm_vidc_inst *inst, struct vb2_buffer *vb)
 {
-	int rc = 0, capture_count, output_count;
+	int rc, capture_count, output_count;
 	struct msm_vidc_core *core;
 	struct hfi_device *hdev;
 	struct {
@@ -3977,6 +3985,8 @@ int msm_comm_try_get_prop(struct msm_vidc_inst *inst, enum hal_property ptype,
 	}
 	mutex_unlock(&inst->sync_lock);
 
+	init_completion(&inst->completions[
+			SESSION_MSG_INDEX(HAL_SESSION_PROPERTY_INFO)]);
 	switch (ptype) {
 	case HAL_PARAM_PROFILE_LEVEL_CURRENT:
 	case HAL_CONFIG_VDEC_ENTROPY:
@@ -4200,6 +4210,8 @@ int msm_comm_release_scratch_buffers(struct msm_vidc_inst *inst,
 		if (inst->state != MSM_VIDC_CORE_INVALID &&
 				core->state != VIDC_CORE_INVALID) {
 			buffer_info.response_required = true;
+			init_completion(&inst->completions[SESSION_MSG_INDEX
+			   (HAL_SESSION_RELEASE_BUFFER_DONE)]);
 			rc = call_hfi_op(hdev, session_release_buffers,
 				(void *)inst->session, &buffer_info);
 			if (rc) {
@@ -4270,6 +4282,9 @@ int msm_comm_release_persist_buffers(struct msm_vidc_inst *inst)
 		if (inst->state != MSM_VIDC_CORE_INVALID &&
 				core->state != VIDC_CORE_INVALID) {
 			buffer_info.response_required = true;
+			init_completion(
+			   &inst->completions[SESSION_MSG_INDEX
+			   (HAL_SESSION_RELEASE_BUFFER_DONE)]);
 			rc = call_hfi_op(hdev, session_release_buffers,
 				(void *)inst->session, &buffer_info);
 			if (rc) {
