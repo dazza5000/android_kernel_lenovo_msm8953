@@ -169,7 +169,8 @@ static int32_t msm_vfe40_init_qos_parms(struct vfe_device *vfe_dev,
 			qos_regs, qos_entries);
 		if (rc < 0) {
 			pr_err("%s: NO QOS BUS BDG info\n", __func__);
-
+			kfree(qos_settings);
+			kfree(qos_regs);
 		} else {
 			if (qos_parms->settings) {
 				rc = of_property_read_u32_array(of_node,
@@ -178,15 +179,20 @@ static int32_t msm_vfe40_init_qos_parms(struct vfe_device *vfe_dev,
 				if (rc < 0) {
 					pr_err("%s: NO QOS settings\n",
 						__func__);
+					kfree(qos_settings);
+					kfree(qos_regs);
 				} else {
 					for (i = 0; i < qos_entries; i++)
 						msm_camera_io_w(qos_settings[i],
 							vfebase + qos_regs[i]);
+					kfree(qos_settings);
+					kfree(qos_regs);
 				}
+			} else {
+				kfree(qos_settings);
+				kfree(qos_regs);
 			}
 		}
-		kfree(qos_settings);
-		kfree(qos_regs);
 	}
 	rc = of_property_read_u32(of_node, ds_parms->entries,
 		&ds_entries);
@@ -210,6 +216,8 @@ static int32_t msm_vfe40_init_qos_parms(struct vfe_device *vfe_dev,
 			ds_regs, ds_entries);
 		if (rc < 0) {
 			pr_err("%s: NO D/S register info\n", __func__);
+			kfree(ds_settings);
+			kfree(ds_regs);
 		} else {
 			if (ds_parms->settings) {
 				rc = of_property_read_u32_array(of_node,
@@ -218,16 +226,20 @@ static int32_t msm_vfe40_init_qos_parms(struct vfe_device *vfe_dev,
 				if (rc < 0) {
 					pr_err("%s: NO D/S settings\n",
 						__func__);
-				} else {
+					kfree(ds_settings);
+					kfree(ds_regs);
+	} else {
 					for (i = 0; i < ds_entries; i++)
 						msm_camera_io_w(ds_settings[i],
 							vfebase + ds_regs[i]);
+						kfree(ds_regs);
+						kfree(ds_settings);
 				}
+			} else {
+				kfree(ds_regs);
+				kfree(ds_settings);
 			}
-
 		}
-		kfree(ds_settings);
-		kfree(ds_regs);
 	}
 	return 0;
 }
@@ -358,24 +370,15 @@ static void msm_vfe40_clear_status_reg(struct vfe_device *vfe_dev)
 static void msm_vfe40_process_reset_irq(struct vfe_device *vfe_dev,
 	uint32_t irq_status0, uint32_t irq_status1)
 {
-	unsigned long flags;
-
-	if (irq_status0 & (1 << 31)) {
-		spin_lock_irqsave(&vfe_dev->reset_completion_lock, flags);
+	if (irq_status0 & (1 << 31))
 		complete(&vfe_dev->reset_complete);
-		spin_unlock_irqrestore(&vfe_dev->reset_completion_lock, flags);
-	}
 }
 
 static void msm_vfe40_process_halt_irq(struct vfe_device *vfe_dev,
 	uint32_t irq_status0, uint32_t irq_status1)
 {
-	unsigned long flags;
-
 	if (irq_status1 & (1 << 8)) {
-		spin_lock_irqsave(&vfe_dev->halt_completion_lock, flags);
 		complete(&vfe_dev->halt_complete);
-		spin_unlock_irqrestore(&vfe_dev->halt_completion_lock, flags);
 		msm_camera_io_w(0x0, vfe_dev->vfe_base + 0x2C0);
 	}
 }
@@ -765,11 +768,7 @@ static long msm_vfe40_reset_hardware(struct vfe_device *vfe_dev,
 	uint32_t first_start, uint32_t blocking_call)
 {
 	long rc = 0;
-	unsigned long flags;
-
-	spin_lock_irqsave(&vfe_dev->reset_completion_lock, flags);
 	init_completion(&vfe_dev->reset_complete);
-	spin_unlock_irqrestore(&vfe_dev->reset_completion_lock, flags);
 
 	if (first_start) {
 		msm_camera_io_w_mb(0x1FF, vfe_dev->vfe_base + 0xC);
@@ -890,8 +889,6 @@ static void msm_vfe40_cfg_framedrop(void __iomem *vfe_base,
 		msm_camera_io_w(temp | (framedrop_period - 1) << 2,
 		vfe_base + VFE40_WM_BASE(stream_info->wm[i]) + 0xC);
 	}
-
-	msm_camera_io_w_mb(0x1, vfe_base + 0x378);
 }
 
 static void msm_vfe40_clear_framedrop(struct vfe_device *vfe_dev,
@@ -1735,7 +1732,6 @@ static int msm_vfe40_axi_halt(struct vfe_device *vfe_dev,
 {
 	int rc = 0;
 	enum msm_vfe_input_src i;
-	unsigned long flags;
 
 	/* Keep only halt and restart mask */
 	msm_vfe40_set_halt_restart_mask(vfe_dev);
@@ -1770,9 +1766,7 @@ static int msm_vfe40_axi_halt(struct vfe_device *vfe_dev,
 	}
 
 	if (blocking) {
-		spin_lock_irqsave(&vfe_dev->halt_completion_lock, flags);
 		init_completion(&vfe_dev->halt_complete);
-		spin_unlock_irqrestore(&vfe_dev->halt_completion_lock, flags);
 		/* Halt AXI Bus Bridge */
 		msm_camera_io_w_mb(0x1, vfe_dev->vfe_base + 0x2C0);
 		rc = wait_for_completion_interruptible_timeout(

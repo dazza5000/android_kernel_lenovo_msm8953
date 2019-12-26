@@ -18,11 +18,11 @@
 #include "msm_cci.h"
 #include "msm_camera_dt_util.h"
 
-#if defined(CONFIG_MACH_LENOVO_TB8703) || defined(CONFIG_MACH_LENOVO_TBX704) || defined (CONFIG_MACH_LENOVO_TB8704) ||defined (CONFIG_MACH_LENOVO_TB8804) || defined (CONFIG_MACH_LENOVO_TB8504)
-#include <soc/qcom/camera2.h>
 
+#if   defined (CONFIG_KERNEL_CUSTOM_P3590) ||defined (CONFIG_KERNEL_CUSTOM_P3592) || defined (CONFIG_KERNEL_CUSTOM_P3588)
+#include <soc/qcom/camera2.h>
 extern struct vendor_eeprom s_vendor_eeprom[CAMERA_VENDOR_EEPROM_COUNT_MAX];
-#endif
+#endif/*CONFIG_KERNEL_CUSTOM_P3590*/
 
 /* Logging macro */
 #undef CDBG
@@ -92,17 +92,13 @@ static int32_t msm_sensor_driver_create_i2c_v4l_subdev
 	struct i2c_client *client = s_ctrl->sensor_i2c_client->client;
 
 	CDBG("%s %s I2c probe succeeded\n", __func__, client->name);
-#if !defined(CONFIG_MACH_LENOVO_TB8703) && !defined(CONFIG_MACH_LENOVO_TBX704) && !defined (CONFIG_MACH_LENOVO_TB8704) && !defined (CONFIG_MACH_LENOVO_TB8804) && !defined (CONFIG_MACH_LENOVO_TB8504)
 	if (0 == s_ctrl->bypass_video_node_creation) {
-#endif
 		rc = camera_init_v4l2(&client->dev, &session_id);
 		if (rc < 0) {
 			pr_err("failed: camera_init_i2c_v4l2 rc %d", rc);
 			return rc;
 		}
-#if !defined(CONFIG_MACH_LENOVO_TB8703) && !defined(CONFIG_MACH_LENOVO_TBX704) && !defined (CONFIG_MACH_LENOVO_TB8704) && !defined (CONFIG_MACH_LENOVO_TB8804) && !defined (CONFIG_MACH_LENOVO_TB8504)
 	}
-#endif
 
 	CDBG("%s rc %d session_id %d\n", __func__, rc, session_id);
 	snprintf(s_ctrl->msm_sd.sd.name,
@@ -140,17 +136,13 @@ static int32_t msm_sensor_driver_create_v4l_subdev
 	int32_t rc = 0;
 	uint32_t session_id = 0;
 
-#if !defined(CONFIG_MACH_LENOVO_TB8703) && !defined(CONFIG_MACH_LENOVO_TBX704) && !defined (CONFIG_MACH_LENOVO_TB8704) && !defined (CONFIG_MACH_LENOVO_TB8804) && !defined (CONFIG_MACH_LENOVO_TB8504)
 	if (0 == s_ctrl->bypass_video_node_creation) {
-#endif
 		rc = camera_init_v4l2(&s_ctrl->pdev->dev, &session_id);
 		if (rc < 0) {
 			pr_err("failed: camera_init_v4l2 rc %d", rc);
 			return rc;
 		}
-#if !defined(CONFIG_MACH_LENOVO_TB8703) && !defined(CONFIG_MACH_LENOVO_TBX704) && !defined (CONFIG_MACH_LENOVO_TB8704) && !defined (CONFIG_MACH_LENOVO_TB8804) && !defined (CONFIG_MACH_LENOVO_TB8504)
 	}
-#endif
 
 	CDBG("rc %d session_id %d", rc, session_id);
 	s_ctrl->sensordata->sensor_info->session_id = session_id;
@@ -650,7 +642,6 @@ static int32_t msm_sensor_get_power_settings(void *setting,
 		power_info);
 	if (rc < 0) {
 		pr_err("failed");
-		kfree(power_info->power_setting);
 		return -EINVAL;
 	}
 	return rc;
@@ -692,12 +683,12 @@ static void msm_sensor_fill_sensor_info(struct msm_sensor_ctrl_t *s_ctrl,
 	strlcpy(entity_name, s_ctrl->msm_sd.sd.entity.name, MAX_SENSOR_NAME);
 }
 
-#if defined(CONFIG_MACH_LENOVO_TB8703) || defined(CONFIG_MACH_LENOVO_TBX704) || defined(CONFIG_MACH_LENOVO_TB8704) || defined(CONFIG_MACH_LENOVO_TB8804) || defined(CONFIG_MACH_LENOVO_TB8504)
 /* add sensor info for factory mode
    begin
 */
+#define MODULE_INFO_LENTH 128
 static struct kobject *msm_sensor_device=NULL;
-static char module_info[80] = {0};
+static char module_info[MODULE_INFO_LENTH] = {0};
 
 void msm_sensor_set_module_info(struct msm_sensor_ctrl_t *s_ctrl)
 {
@@ -756,9 +747,6 @@ int32_t msm_sensor_init_device_name(void)
 /* add sensor info for factory mode
    end
 */
-
-#endif
-
 /* static function definition */
 int32_t msm_sensor_driver_probe(void *setting,
 	struct msm_sensor_info_t *probed_info, char *entity_name)
@@ -768,13 +756,13 @@ int32_t msm_sensor_driver_probe(void *setting,
 	struct msm_camera_cci_client        *cci_client = NULL;
 	struct msm_camera_sensor_slave_info *slave_info = NULL;
 	struct msm_camera_slave_info        *camera_info = NULL;
-#if defined(CONFIG_MACH_LENOVO_TB8703) || defined(CONFIG_MACH_LENOVO_TBX704) || defined (CONFIG_MACH_LENOVO_TB8704) ||defined (CONFIG_MACH_LENOVO_TB8804) || defined (CONFIG_MACH_LENOVO_TB8504)
-	int32_t i = 0;
-#endif
+
 	unsigned long                        mount_pos = 0;
 	uint32_t                             is_yuv;
+#if defined (CONFIG_KERNEL_CUSTOM_P3590) ||defined (CONFIG_KERNEL_CUSTOM_P3592) || defined (CONFIG_KERNEL_CUSTOM_P3588)
 
-	pr_err("enter msm_sensor_driver_probe");
+	int32_t i = 0;
+#endif
 	/* Validate input parameters */
 	if (!setting) {
 		pr_err("failed: slave_info %pK", setting);
@@ -786,8 +774,6 @@ int32_t msm_sensor_driver_probe(void *setting,
 	if (!slave_info)
 		return -ENOMEM;
 #ifdef CONFIG_COMPAT
-	pr_err("enter msm_sensor_driver_probe compat");
-
 	if (is_compat_task()) {
 		struct msm_camera_sensor_slave_info32 *slave_info32 =
 			kzalloc(sizeof(*slave_info32), GFP_KERNEL);
@@ -843,16 +829,12 @@ int32_t msm_sensor_driver_probe(void *setting,
 			slave_info32->sensor_init_params;
 		slave_info->output_format =
 			slave_info32->output_format;
-#if !defined(CONFIG_MACH_LENOVO_TB8703) && !defined(CONFIG_MACH_LENOVO_TBX704) && !defined (CONFIG_MACH_LENOVO_TB8704) && !defined (CONFIG_MACH_LENOVO_TB8804) && !defined (CONFIG_MACH_LENOVO_TB8504)
 		slave_info->bypass_video_node_creation =
 			!!slave_info32->bypass_video_node_creation;
-#endif
 		kfree(slave_info32);
 	} else
 #endif
 	{
-		pr_err("enter msm_sensor_driver_probe compat else");
-
 		if (copy_from_user(slave_info,
 					(void *)setting, sizeof(*slave_info))) {
 			pr_err("failed: copy_from_user");
@@ -860,17 +842,26 @@ int32_t msm_sensor_driver_probe(void *setting,
 			goto free_slave_info;
 		}
 	}
-#if defined (CONFIG_MACH_LENOVO_TB8504)
+#if defined (CONFIG_KERNEL_CUSTOM_P3588)
 	//lct.hzy added for eeprom match id 20161219
+//	int32_t th = 0;
 	if(s_vendor_eeprom[i].eeprom_name != NULL){
+	    CDBG(" tom han dtsi eeprom_name[%d]=%s, module_id=%d\n",i,s_vendor_eeprom[i].eeprom_name, s_vendor_eeprom[i].module_id);
 	    for(i=0; i<CAMERA_VENDOR_EEPROM_COUNT_MAX; i++){
+	CDBG(" dtsi eeprom_name[%d]=%s, slave_info->eeprom_name = %s\n",i,s_vendor_eeprom[i].eeprom_name, slave_info->eeprom_name);
 	        if(strcmp(slave_info->eeprom_name,s_vendor_eeprom[i].eeprom_name) == 0){
+			
                     //s_vendor_eeprom is from kernel camera dtsi
 	            CDBG(" dtsi eeprom_name[%d]=%s, module_id=%d\n",i,s_vendor_eeprom[i].eeprom_name, s_vendor_eeprom[i].module_id);
+		    CDBG(" tom han slave_info->eeprom_name = %s\n",slave_info->eeprom_name);
 	            if(((strcmp(slave_info->sensor_name,"qtech_ov5695") == 0) && (s_vendor_eeprom[i].module_id == MID_QTECH))
 		        || ((strcmp(slave_info->sensor_name,"sunny_ov5695") == 0) && (s_vendor_eeprom[i].module_id == MID_SUNNY))
+			|| ((strcmp(slave_info->sensor_name,"gc5025a") == 0))
+			|| ((strcmp(slave_info->sensor_name,"ov8856") == 0)  && (s_vendor_eeprom[i].module_id == MID_QTECH))   //add 8M 
+		       	|| ((strcmp(slave_info->sensor_name,"sp2509_lianchuang") == 0))
 		        || ((strcmp(slave_info->sensor_name,"sp2509") == 0))
 		        || ((strcmp(slave_info->sensor_name,"hi259") == 0))
+			|| ((strcmp(slave_info->sensor_name,"hi556") == 0))
 		    ){
 		        CDBG("module found!probe continue!\n");
 		        break;
@@ -883,9 +874,12 @@ int32_t msm_sensor_driver_probe(void *setting,
 		goto free_slave_info;
 	    }
 	}
-#endif/*CONFIG_MACH_LENOVO_TB8504*/
-#if defined (CONFIG_MACH_LENOVO_TB8704) ||defined (CONFIG_MACH_LENOVO_TB8804)
-	//lct.CHB added for eeprom match id 20161101
+	else{
+		CDBG("tom han s_vendor_eeprom[i].eeprom_name is null!\n");	
+	}
+#endif/*CONFIG_KERNEL_CUSTOM_P3588*/
+#if defined (CONFIG_KERNEL_CUSTOM_P3590) ||defined (CONFIG_KERNEL_CUSTOM_P3592)
+	//lct.CHB added for eeprom match id 20161101 
 	if(s_vendor_eeprom[i].eeprom_name != NULL){
 	    for(i=0; i<CAMERA_VENDOR_EEPROM_COUNT_MAX; i++){
 	        if(strcmp(slave_info->eeprom_name,s_vendor_eeprom[i].eeprom_name) == 0){
@@ -908,56 +902,7 @@ int32_t msm_sensor_driver_probe(void *setting,
 		goto free_slave_info;
 	    }
 	}
-#endif/*CONFIG_MACH_LENOVO_TB8704*/
-
-	if (strlen(slave_info->sensor_name) >= MAX_SENSOR_NAME ||
-		strlen(slave_info->eeprom_name) >= MAX_SENSOR_NAME ||
-		strlen(slave_info->actuator_name) >= MAX_SENSOR_NAME ||
-		strlen(slave_info->ois_name) >= MAX_SENSOR_NAME) {
-		pr_err("failed: name len greater than 32.\n");
-		pr_err("sensor name len:%zu, eeprom name len: %zu.\n",
-			strlen(slave_info->sensor_name),
-			strlen(slave_info->eeprom_name));
-		pr_err("actuator name len: %zu, ois name len:%zu.\n",
-			strlen(slave_info->actuator_name),
-			strlen(slave_info->ois_name));
-		rc = -EINVAL;
-		goto free_slave_info;
-	}
-	pr_err("enter msm_sensor_driver_probe before lenovo");
-
-#if defined(CONFIG_MACH_LENOVO_TB8703) || defined(CONFIG_MACH_LENOVO_TBX704)
-	//lct.huk added for eeprom match id 20160523
-	if (s_vendor_eeprom[i].eeprom_name != NULL){
-		for (i=0; i<CAMERA_VENDOR_EEPROM_COUNT_MAX; i++){
-			if (strcmp(slave_info->eeprom_name,s_vendor_eeprom[i].eeprom_name) == 0) {
-				pr_info("dtsi eeprom_name[%d]=%s, module_id=%d\n", i, s_vendor_eeprom[i].eeprom_name, s_vendor_eeprom[i].module_id); //s_vendor_eeprom is from kernel camera dtsi
-				pr_info("sensor_name=%s", slave_info->sensor_name);
-				if (((strcmp(slave_info->sensor_name,"imx219") == 0) && (s_vendor_eeprom[i].module_id == MID_QTECH))
-					|| ((strcmp(slave_info->sensor_name,"imx219_fx219aq") == 0) && (s_vendor_eeprom[i].module_id == MID_QTECH))
-					|| ((strcmp(slave_info->sensor_name,"imx219_ofilm") == 0) && (s_vendor_eeprom[i].module_id == MID_QTECH))
-					|| ((strcmp(slave_info->sensor_name,"ov5695_f5695ak") == 0) && (s_vendor_eeprom[i].module_id == MID_QTECH))
-					|| ((strcmp(slave_info->sensor_name,"ov5695_ccbfl05006") == 0) && (s_vendor_eeprom[i].module_id == MID_LITEARRAY))
-					|| ((strcmp(slave_info->sensor_name,"ov5695_qtech2") == 0) && (s_vendor_eeprom[i].module_id == MID_QTECH))
-					|| ((strcmp(slave_info->sensor_name,"ov8856") == 0) && (s_vendor_eeprom[i].module_id == MID_OFILM))
-				) {
-					pr_info("module found! probe continue!\n");
-					break;
-				} else if ((strcmp(slave_info->sensor_name,"ov5695_avc") == 0)) {
-					s_vendor_eeprom[i].module_id = MID_AVC;
-					pr_info("AVC module found! probe continue!\n");
-					break;
-				}
-			}
-		}
-		if (i >= CAMERA_VENDOR_EEPROM_COUNT_MAX) {
-			pr_err("module not found! probe break!\n");
-			rc = -EFAULT;
-			goto free_slave_info;
-		}
-}
-#endif
-	pr_err("enter msm_sensor_driver_probe after lenovo");
+#endif/*CONFIG_KERNEL_CUSTOM_P3590*/
 
 	/* Print slave info */
 	CDBG("camera id %d Slave addr 0x%X addr_type %d\n",
@@ -974,10 +919,8 @@ int32_t msm_sensor_driver_probe(void *setting,
 		slave_info->sensor_init_params.position);
 	CDBG("mount %d",
 		slave_info->sensor_init_params.sensor_mount_angle);
-#if !defined(CONFIG_MACH_LENOVO_TB8703) && !defined(CONFIG_MACH_LENOVO_TBX704) && !defined (CONFIG_MACH_LENOVO_TB8704) && !defined (CONFIG_MACH_LENOVO_TB8804) && !defined (CONFIG_MACH_LENOVO_TB8504)
 	CDBG("bypass video node creation %d",
 		slave_info->bypass_video_node_creation);
-#endif
 	/* Validate camera id */
 	if (slave_info->camera_id >= MAX_CAMERAS) {
 		pr_err("failed: invalid camera id %d max %d",
@@ -1039,7 +982,7 @@ int32_t msm_sensor_driver_probe(void *setting,
 
 	camera_info = kzalloc(sizeof(struct msm_camera_slave_info), GFP_KERNEL);
 	if (!camera_info)
-		goto free_power_settings;
+		goto free_slave_info;
 
 	s_ctrl->sensordata->slave_info = camera_info;
 
@@ -1144,10 +1087,8 @@ CSID_TG:
 
 	pr_err("%s probe succeeded", slave_info->sensor_name);
 
-#if !defined(CONFIG_MACH_LENOVO_TB8703) && !defined(CONFIG_MACH_LENOVO_TBX704) && !defined (CONFIG_MACH_LENOVO_TB8704) && !defined (CONFIG_MACH_LENOVO_TB8804) && !defined (CONFIG_MACH_LENOVO_TB8504)
 	s_ctrl->bypass_video_node_creation =
 		slave_info->bypass_video_node_creation;
-#endif
 
 	/*
 	 * Update the subdevice id of flash-src based on availability in kernel.
@@ -1201,11 +1142,6 @@ CSID_TG:
 
 	msm_sensor_fill_sensor_info(s_ctrl, probed_info, entity_name);
 
-#if defined(CONFIG_MACH_LENOVO_TB8703) || defined(CONFIG_MACH_LENOVO_TBX704) || defined (CONFIG_MACH_LENOVO_TB8704) ||defined (CONFIG_MACH_LENOVO_TB8804) || defined (CONFIG_MACH_LENOVO_TB8504)
-	msm_sensor_init_device_name();
-	msm_sensor_set_module_info(s_ctrl);
-#endif
-
 	/*
 	 * Set probe succeeded flag to 1 so that no other camera shall
 	 * probed on this slot
@@ -1219,9 +1155,6 @@ camera_power_down:
 	s_ctrl->func_tbl->sensor_power_down(s_ctrl);
 free_camera_info:
 	kfree(camera_info);
-free_power_settings:
-	kfree(s_ctrl->sensordata->power_info.power_setting);
-	kfree(s_ctrl->sensordata->power_info.power_down_setting);
 free_slave_info:
 	kfree(slave_info);
 	return rc;

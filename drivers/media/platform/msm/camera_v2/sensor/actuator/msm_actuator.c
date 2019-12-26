@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -760,9 +760,6 @@ static int32_t msm_actuator_bivcm_move_focus(
 		a_ctrl->curr_step_pos, dest_step_pos, curr_lens_pos);
 
 	while (a_ctrl->curr_step_pos != dest_step_pos) {
-		if (a_ctrl->curr_region_index >= a_ctrl->region_size)
-			break;
-
 		step_boundary =
 			a_ctrl->region_params[a_ctrl->curr_region_index].
 			step_bound[dir];
@@ -1732,6 +1729,10 @@ static long msm_actuator_subdev_do_ioctl(
 			parg = &actuator_data;
 			break;
 		}
+		break;
+	case VIDIOC_MSM_ACTUATOR_CFG:
+		pr_err("%s: invalid cmd 0x%x received\n", __func__, cmd);
+		return -EINVAL;
 	}
 
 	rc = msm_actuator_subdev_ioctl(sd, cmd, parg);

@@ -284,7 +284,7 @@ int msm_sensor_get_sub_module_index(struct device_node *of_node,
 		of_node_put(src_node);
 		src_node = NULL;
 	}
-#if !defined(CONFIG_MACH_LENOVO_TB8703)
+
 	src_node = of_parse_phandle(of_node, "qcom,ir-led-src", 0);
 	if (!src_node) {
 		CDBG("%s:%d src_node NULL\n", __func__, __LINE__);
@@ -316,7 +316,7 @@ int msm_sensor_get_sub_module_index(struct device_node *of_node,
 		of_node_put(src_node);
 		src_node = NULL;
 	}
-#endif
+
 	rc = of_property_read_u32(of_node, "qcom,strobe-flash-sd-index", &val);
 	if (rc != -EINVAL) {
 		CDBG("%s qcom,strobe-flash-sd-index %d, rc %d\n", __func__,
@@ -789,11 +789,8 @@ int msm_camera_get_dt_gpio_set_tbl(struct device_node *of_node,
 	uint32_t count = 0;
 	uint32_t *val_array = NULL;
 
-	rc = of_property_read_u32(of_node, "qcom,gpio-set-tbl-num", &count);
-	if (rc < 0) {
-		pr_err("%s failed %d\n", __func__, __LINE__);
+	if (!of_get_property(of_node, "qcom,gpio-set-tbl-num", &count))
 		return 0;
-	}
 
 	count /= sizeof(uint32_t);
 	if (!count) {

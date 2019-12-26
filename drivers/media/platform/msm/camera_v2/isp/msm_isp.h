@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -740,8 +740,6 @@ struct vfe_device {
 	struct mutex core_mutex;
 	spinlock_t shared_data_lock;
 	spinlock_t reg_update_lock;
-	spinlock_t reset_completion_lock;
-	spinlock_t halt_completion_lock;
 	spinlock_t tasklet_lock;
 
 	/* Tasklet info */
@@ -772,9 +770,7 @@ struct vfe_device {
 	uint32_t is_split;
 	uint32_t dual_vfe_enable;
 	unsigned long page_fault_addr;
-#if !defined(CONFIG_MACH_LENOVO_TB8703)
 	uint32_t vfe_hw_limit;
-#endif
 
 	/* Debug variables */
 	int dump_reg;
